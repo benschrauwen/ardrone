@@ -25,5 +25,10 @@ int ctl_FlatTrim();
 void ctl_SetSetpoint(float pitch, float roll, float yawsp, float h);
 void ctl_SetSetpointDiff(float pitch, float roll, float yaw, float h);
 void ctl_Close();
+void setPidPitchRoll(float Kp, float Ki, float Kd);
 void ctl_SetGas(float gas);
+void ctl_SetThrottleOff();
+void navLog_Send();
+void setPidYaw(float Kp, float Ki, float Kd);
+void setPidHight(float Kp, float Ki, float Kd);
 #endif

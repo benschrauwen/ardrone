@@ -25,7 +25,7 @@
 //#include <fcntl.h>   /* File control definitions */
 //#include <errno.h>   /* Error number definitions */
 //#include <termios.h> /* POSIX terminal control definitions */
-//#include <stdlib.h>  //exit()
+#include <stdlib.h>  //exit()
 #include <pthread.h>
 #include <ctype.h>    /* For tolower() function */
 #include <math.h>
@@ -40,18 +40,34 @@
 #include "../udp/udp.h"
 #include "controlthread.h"
 
+float Kp = 0.3;
+float Ki = 0.0;
+float Kd = -0.05;
+
+float gain = 0.01;
+
+void setPid() {
+	setPidPitchRoll(Kp,Ki,Kd);
+	//setPidYaw(Kp,Ki,Kd);
+	//setPidHight(Kp,Ki,Kd);
+}
+
 int main()
 {
-  printf("'fly' version 1.00 - Copyright (C) 2011 Hugo Perquin - http://blog.perquin.com\n");
+  printf("Reservoir Lab QuadCopter control\n");
   //wait for udp packet on port 7777
   udp_struct udpCmd;
   udpServer_Init(&udpCmd,7777,1/*blocking*/);
   char buf[1024];
-  printf("Waiting for UDP wakeup on port 7777\n");
-  int bufcnt=udpServer_Receive(&udpCmd, buf, 1024);
-  if(bufcnt<=0) return 1;
-  buf[bufcnt]=0;
-  printf("UDP wakeup received from %s\n",inet_ntoa(udpCmd.si_other.sin_addr));
+
+  setPid();
+
+  float roll = 0;
+  float pitch = 0;
+  float yaw = 0;
+  float hight = 0;
+
+  int bufcnt;
 
   //kill program.elf
   int rc = system("/usr/bin/killall program.elf > /dev/null 2>&1");
@@ -63,30 +79,100 @@ int main()
 
   //main loop	
   while(1) { 
-    //wait for next packet on cmd port
-    bufcnt=udpServer_Receive(&udpCmd, buf, 1024);
-    if(bufcnt<=0) continue;
-    buf[bufcnt]=0;
-    
-    //split tokens
-    int i=0;
-    char delims[] = ",";
-    char *result = NULL;
-    result = strtok( buf, delims );
-    if(strcmp(result,"s")) continue;
-    result = strtok( NULL, delims );
-    float val[4];
-    while( i<4 && result != NULL ) {
-      val[i]=atof(result);
-      //printf( "->token%d is \"%s\" %f\n", i, result, val[i] );
-      result = strtok( NULL, delims );
-      i++;
-    }
-    if(i==4) {
-      printf("set:%f,%f,%f,%f\n", val[0],val[1],val[2],val[3] );
-      ctl_SetSetpoint(val[0],val[1],val[2],val[3]);
-    }
+	//handle user input
+	int c=tolower(util_getch());
 
+	if(c=='s') {
+	  roll = 0;
+      pitch = 0;
+      yaw = 0;
+	  hight = 10;
+	}
+	if(c=='q') {
+		printf("QUITTING !!!\n");
+	    ctl_SetThrottleOff();
+		sleep(1);
+		break;
+	}
+	if(c=='z') {
+		navLog_Send();
+	}
+	if(c=='u') {
+		Kp = Kp+gain;
+		printf("P-up: %f\n",Kp);
+		setPid();
+	}
+	if(c=='j') {
+		Kp = Kp-gain;
+		printf("P-down: %f\n",Kp);
+		setPid();
+	}
+	if(c=='i') {
+		Ki = Ki+gain;
+		printf("I-up: %f\n",Ki);
+		setPid();
+	}
+	if(c=='k') {
+		Ki = Ki-gain;
+		printf("I-down: %f\n",Ki);
+		setPid();
+	}
+	if(c=='o') {
+		Kd = Kd+gain;
+		printf("D-up: %f\n",Kd);
+		setPid();
+	}
+	if(c=='l') {
+		Kd = Kd-gain;
+		printf("D-down: %f\n",Kd);
+		setPid();
+	}
+
+	if(c=='+') {
+		ctl_SetGas(0.01);
+		printf("gas ++\n");
+	}
+	if(c=='-') {
+		ctl_SetGas(-0.01);
+		printf("gas --\n");
+	}
+
+	if(c=='w') { // up
+		pitch+=0.05;
+		printf("pitch: %f\n", pitch);
+	}
+	if(c=='x') { // down
+		pitch-=0.05;
+		printf("pitch: %f\n", pitch);
+	}
+	if(c=='a') { // left
+		roll+=0.05;
+		printf("roll: %f\n", roll);
+	}
+	if(c=='d') { // right
+		roll-=0.05;
+		printf("roll: %f\n", roll);
+	}
+
+	if(c=='1') {
+		yaw+=0.1;
+		printf("yaw: %f\n", yaw);
+	}
+	if(c=='2') {
+		yaw-=0.1;
+		printf("yaw: %f\n", yaw);
+	}
+
+	if(c=='e') { // pgup
+		hight+=10.;
+		printf("hight: %f\n", hight);
+	}
+	if(c=='c') { // pgdown
+		hight-=10.;
+		printf("hight: %f\n", hight);
+	}
+
+	ctl_SetSetpoint(roll,pitch,yaw,hight);
   }
   ctl_Close();
   printf("\nDone...\n");
